@@ -1,4 +1,4 @@
-
-target/
 dbt_packages/
+target/
 logs/
+.user.yml
