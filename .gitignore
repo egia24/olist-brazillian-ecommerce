@@ -10,3 +10,4 @@ logs/
 profiles.yml       
 *.env
 secrets/
+data/
