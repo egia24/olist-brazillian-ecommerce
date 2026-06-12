@@ -1,0 +1,91 @@
+version: '3.8'
+
+x-airflow-common:
+  &airflow-common
+  build:
+    context: .
+    dockerfile: Dockerfile.airflow  
+  environment:
+    &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-airflow/airflow
+    AIRFLOW__CORE__FERNET_KEY: ''
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    - ./plugins:/opt/airflow/plugins
+    - ./BE:/opt/airflow/dbt
+  depends_on:
+    postgres-airflow:
+      condition: service_healthy
+
+services:
+
+  # ─── PostgreSQL untuk DATA ───────────────────────────────
+  postgres-data:
+    image: postgres:13
+    container_name: be_postgres_data
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: brazillian_ecommerce
+    ports:
+      - "5435:5432"       # ← port 5433 supaya tidak bentrok
+    volumes:
+      - postgres-data-volume:/var/lib/postgresql/data
+
+  # ─── PostgreSQL untuk AIRFLOW ────────────────────────────
+  postgres-airflow:
+    image: postgres:13
+    container_name: be_postgres_airflow
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-airflow-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+
+  # ─── DBT ─────────────────────────────────────────────────
+  dbt:
+    image: ghcr.io/dbt-labs/dbt-postgres:1.7.0
+    container_name: be_dbt
+    volumes:
+      - ./BE:/usr/app/dbt
+    working_dir: /usr/app/dbt
+    entrypoint: ["tail", "-f", "/dev/null"]   # ← keep container alive
+
+  # ─── AIRFLOW WEBSERVER ───────────────────────────────────
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: be_airflow_webserver
+    command: webserver
+    ports:
+      - "8080:8080"
+
+  # ─── AIRFLOW SCHEDULER ───────────────────────────────────
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: be_airflow_scheduler
+    command: scheduler
+
+  # ─── AIRFLOW INIT ────────────────────────────────────────
+  airflow-init:
+    <<: *airflow-common
+    container_name: be_airflow_init
+    command: version
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_UPGRADE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: admin
+      _AIRFLOW_WWW_USER_PASSWORD: admin
+
+volumes:
+  postgres-data-volume:
+  postgres-airflow-volume:
