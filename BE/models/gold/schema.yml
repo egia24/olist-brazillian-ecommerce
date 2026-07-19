@@ -1,0 +1,43 @@
+version: 2
+
+models:
+  - name: agg_revenue_monthly
+    columns:
+      - name: year
+        tests:
+          - not_null
+      - name: month
+        tests:
+          - not_null
+      - name: total_revenue
+        tests:
+          - not_null
+
+  - name: agg_delivery_performance
+    columns:
+      - name: state
+        tests:
+          - not_null
+      - name: total_orders
+        tests:
+          - not_null
+
+  - name: agg_product_performance
+    columns:
+      - name: product_category
+        tests:
+          - not_null
+
+  - name: agg_customer_summary
+    columns:
+      - name: customer_id
+        tests:
+          - not_null
+          - unique
+
+  - name: agg_seller_performance
+    columns:
+      - name: seller_id
+        tests:
+          - not_null
+          - unique

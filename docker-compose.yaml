@@ -8,22 +8,25 @@ x-airflow-common:
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres-airflow/airflow
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_USER}:${AIRFLOW_PASSWORD}@postgres-airflow/${AIRFLOW_DB}
     AIRFLOW__CORE__FERNET_KEY: ''
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    POSTGRES_HOST: ${POSTGRES_HOST}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    POSTGRES_DB: ${POSTGRES_DB}
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
     - ./BE:/opt/airflow/dbt
+  networks:       # ← tambah ini
+    - be_network
   depends_on:
     postgres-airflow:
       condition: service_healthy
 
 services:
-
-  # ─── PostgreSQL untuk DATA ───────────────────────────────
   postgres-data:
     image: postgres:13
     container_name: be_postgres_data
@@ -32,9 +35,11 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5435:5432"       # ← port 5433 supaya tidak bentrok
+      - "5435:5432"       
     volumes:
       - postgres-data-volume:/var/lib/postgresql/data
+    networks:
+      - be_network
 
   # ─── PostgreSQL untuk AIRFLOW ────────────────────────────
   postgres-airflow:
@@ -50,7 +55,9 @@ services:
       test: ["CMD", "pg_isready", "-U", "airflow"]
       interval: 5s
       retries: 5
-
+    networks:
+      - be_network
+      
   # ─── DBT ─────────────────────────────────────────────────
   dbt:
     image: ghcr.io/dbt-labs/dbt-postgres:1.7.0
@@ -59,6 +66,8 @@ services:
       - ./BE:/usr/app/dbt
     working_dir: /usr/app/dbt
     entrypoint: ["tail", "-f", "/dev/null"]   # ← keep container alive
+    networks:
+      - be_network
 
   # ─── AIRFLOW WEBSERVER ───────────────────────────────────
   airflow-webserver:
@@ -67,25 +76,71 @@ services:
     command: webserver
     ports:
       - "8080:8080"
+    depends_on:
+      postgres-airflow:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
 
   # ─── AIRFLOW SCHEDULER ───────────────────────────────────
   airflow-scheduler:
     <<: *airflow-common
     container_name: be_airflow_scheduler
     command: scheduler
-
+    depends_on:
+      postgres-airflow:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
   # ─── AIRFLOW INIT ────────────────────────────────────────
   airflow-init:
     <<: *airflow-common
+    depends_on:
+      postgres-airflow:
+        condition: service_healthy
     container_name: be_airflow_init
-    command: version
+    command:
+      - bash
+      - -c
+      - |
+        airflow db upgrade && \
+        airflow users create \
+          --username admin \
+          --password admin \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@example.com
     environment:
       <<: *airflow-common-env
       _AIRFLOW_DB_UPGRADE: 'true'
       _AIRFLOW_WWW_USER_CREATE: 'true'
       _AIRFLOW_WWW_USER_USERNAME: admin
       _AIRFLOW_WWW_USER_PASSWORD: admin
+    networks:
+      - be_network
+
+  metabase:
+      image: metabase/metabase:v0.49.0
+      container_name: be_metabase
+      ports:
+        - "3000:3000"
+      environment:
+        MB_DB_TYPE: postgres
+        MB_DB_DBNAME: metabase
+        MB_DB_PORT: 5432
+        MB_DB_USER: ${POSTGRES_USER}
+        MB_DB_PASS: ${POSTGRES_PASSWORD}
+        MB_DB_HOST: ${POSTGRES_HOST}
+      depends_on:
+        - postgres-data
+      networks:
+        - be_network
 
 volumes:
   postgres-data-volume:
   postgres-airflow-volume:
+
+networks:
+  be_network:
+    driver: bridge
