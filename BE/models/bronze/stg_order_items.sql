@@ -6,4 +6,4 @@ select
     shipping_limit_date,
     price,
     freight_value
-from {{ source('olist_ecommerce', 'olist_order_items_dataset')}}
+from {{ source('brazillian_ecommerce', 'olist_order_items_dataset')}}

@@ -5,4 +5,4 @@ SELECT
     product_length_cm,
     product_height_cm,
     product_width_cm
-FROM {{ source('olist_ecommerce', 'olist_products_dataset')}}
+FROM {{ source('brazillian_ecommerce', 'olist_products_dataset')}}

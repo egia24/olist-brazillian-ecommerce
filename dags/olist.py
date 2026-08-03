@@ -26,11 +26,11 @@ with DAG(
         bash_command='cd /opt/airflow/dbt && dbt run --select models/bronze/ --profiles-dir /opt/airflow/dbt'
     )
 
-    dbt_snapshot = BashOperator(
-        task_id='dbt_snapshot',
-        bash_command='cd /opt/airflow/dbt && dbt snapshot --profiles-dir /opt/airflow/dbt'
+    dbt_run_snapshot = BashOperator(
+        task_id='dbt_run_snapshot',
+        bash_command='cd /opt/airflow/dbt && dbt snapshot --select models/silver/ --profiles-dir /opt/airflow/dbt'
     )
-
+    
     dbt_run_silver = BashOperator(
         task_id='dbt_run_silver',
         bash_command='cd /opt/airflow/dbt && dbt run --select models/silver/ --profiles-dir /opt/airflow/dbt'
@@ -46,4 +46,4 @@ with DAG(
         bash_command='cd /opt/airflow/dbt && dbt test --profiles-dir /opt/airflow/dbt'
     )
 
-    dbt_run_bronze >> dbt_snapshot >> dbt_run_silver >> dbt_run_gold >> dbt_test    
+    dbt_run_bronze >> dbt_run_snapshot >> dbt_run_silver >> dbt_run_gold >> dbt_test    
